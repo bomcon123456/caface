@@ -1,6 +1,8 @@
 import sys
 import pyrootutils
 import os
+import typer
+from pathlib import Path
 
 root = pyrootutils.setup_root(
     search_from=__file__,
@@ -20,6 +22,8 @@ import numpy as np
 import image_augmenter
 import queue
 from caface import model as model_module
+from backbones import get_model
+
 
 
 def list_image(root, exts=['.jpeg', '.jpg', '.png']):
@@ -111,31 +115,36 @@ def extract_and_save_feature(i, item, q_out, augmenter, backbone, image_root):
         q_out.put((i, None, item))
         return
 
+app = typer.Typer()
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--image_root', type=str, default='./path_to/webface4m_subset_images')
-    parser.add_argument('--pretrained_model_path', type=str, default='../pretrained_models/AdaFaceWebFace4M.ckpt')
-    parser.add_argument('--save_dir', type=str, default='./AdaFaceWebFace4M')
-    args = parser.parse_args()
+@app.command()
+def main(
+    image_root: Path = typer.Argument(..., help="path to image root"),
+    backbone_name: str = typer.Argument(..., help="backbone name"),
+    model_path: Path = typer.Argument(..., help="model path"),
+    save_dir: Path = typer.Argument(..., help="save dir path"),
+):
 
     augmenter = image_augmenter.MultipleAugmenter()
-    backbone = model_module.build_model(model_name='ir_101')
-    backbone = model_module.load_pretrained(backbone, args.pretrained_model_path)
-    backbone.to("cuda:0")
-    backbone.eval()
+    # backbone = model_module.build_model(model_name='ir_101')
+    # backbone = model_module.load_pretrained(backbone, pretrained_model_path)
+    # backbone.to("cuda:0")
+    # backbone.eval()
+    net = get_model(backbone_name, fp16=False)
+    net.load_state_dict(torch.load(model_path))
+    net.eval()
 
-    fname_lst = os.path.join(args.save_dir, 'train.lst')
-    fname_idx = os.path.join(args.save_dir, 'train.idx')
-    fname_rec = os.path.join(args.save_dir, 'train.rec')
-    make_list(args.image_root, fname_lst)
+    fname_lst = os.path.join(save_dir, 'train.lst')
+    fname_idx = os.path.join(save_dir, 'train.idx')
+    fname_rec = os.path.join(save_dir, 'train.rec')
+    make_list(image_root, fname_lst)
     image_list = read_list(fname_lst)
     q_out = queue.Queue()
     record = mx.recordio.MXIndexedRecordIO(fname_idx, fname_rec, 'w')
     cnt = 0
     pre_time = time.time()
     for i, item in enumerate(image_list):
-        extract_and_save_feature(i, item, q_out, augmenter, backbone, args.image_root)
+        extract_and_save_feature(i, item, q_out, augmenter, net, image_root)
         if q_out.empty():
             continue
         _, s, _ = q_out.get()

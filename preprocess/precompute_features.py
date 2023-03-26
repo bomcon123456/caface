@@ -154,3 +154,6 @@ def main(
             print('time:', cur_time - pre_time, ' count:', cnt)
             pre_time = cur_time
         cnt += 1
+
+if __name__ == "__main__":
+    app()

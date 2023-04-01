@@ -67,7 +67,7 @@ def main(
 
     with torch.no_grad():
         batch_size = 256
-        train_dataset = MXDataset(root_dir=rec_path)
+        train_dataset = MXDataset(root_dir=rec_path.as_posix())
         dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=0, shuffle=False)
         center = torch.zeros((len(train_dataset.record_info.label.unique()), 512))
         cul_count = torch.zeros(len(train_dataset.record_info.label.unique()))
@@ -80,7 +80,7 @@ def main(
                 cul_count[tgt] += count
 
         # flipped version
-        train_dataset = MXDataset(root_dir=rec_path, flip_probability=1.0)
+        train_dataset = MXDataset(root_dir=rec_path.as_posix(), flip_probability=1.0)
         dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=0, shuffle=False)
         for batch in tqdm(dataloader):
             img, tgt = batch

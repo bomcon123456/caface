@@ -1,6 +1,8 @@
 import sys
 import pyrootutils
 import os
+import typer
+from pathlib import Path
 
 root = pyrootutils.setup_root(
     search_from=__file__,
@@ -19,6 +21,7 @@ from tqdm import tqdm
 from caface import model as model_module
 import torch
 from mxdataset import MXDataset
+from backbones import get_model
 
 
 def groupby_ops(value: torch.Tensor, labels: torch.LongTensor, op='sum') -> (torch.Tensor, torch.LongTensor):
@@ -42,46 +45,46 @@ def groupby_ops(value: torch.Tensor, labels: torch.LongTensor, op='sum') -> (tor
     return result, new_labels, labels_count
 
 
-if __name__ == '__main__':
+app = typer.Typer()
 
-    parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--pretrained_model_path', type=str, default='../pretrained_models/AdaFaceWebFace4M.ckpt')
-    parser.add_argument('--dataset', type=str, default='./path_to/webface4m_subset')
-    parser.add_argument('--save_dir', type=str, default='./AdaFaceWebFace4M')
-    args = parser.parse_args()
-
+@app.command()
+def main(
+    rec_path: Path = typer.Argument(..., help="path to image root"),
+    backbone_name: str = typer.Argument(..., help="backbone name"),
+    model_path: Path = typer.Argument(..., help="model path"),
+    save_dir: Path = typer.Argument(..., help="save dir path"),
+):
     name = "center_{}_{}.pth".format(
-        os.path.basename(args.pretrained_model_path).replace('.pth', '').replace('.ckpt', ''),
-        os.path.basename(args.dataset).replace('.pth', ''))
+        backbone_name, model_path.parent)
     print('saving at')
-    print(os.path.join(args.save_dir, name))
+    print(save_dir / name)
 
     # load model (This model assumes the input to be BGR image (cv2), not RGB (pil))
-    model = model_module.build_model(model_name='ir_101')
-    model = model_module.load_pretrained(model, args.pretrained_model_path)
-    model.to("cuda:0")
-    model.eval()
+    net = get_model(backbone_name, fp16=False)
+    net.load_state_dict(torch.load(model_path))
+    net.to("cuda:0")
+    net.eval()
 
     with torch.no_grad():
-        batch_size = 128
-        train_dataset = MXDataset(root_dir=args.dataset)
+        batch_size = 256
+        train_dataset = MXDataset(root_dir=rec_path)
         dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=0, shuffle=False)
         center = torch.zeros((len(train_dataset.record_info.label.unique()), 512))
         cul_count = torch.zeros(len(train_dataset.record_info.label.unique()))
         for batch in tqdm(dataloader):
             img, tgt = batch
-            embedding, norm = model(img.cuda())
+            embedding, norm = net(img.cuda())
             sum_embedding, new_tgt, labels_count = groupby_ops(embedding.detach().cpu(), tgt, op='sum')
             for emb, tgt, count in zip(sum_embedding, new_tgt, labels_count):
                 center[tgt] += emb
                 cul_count[tgt] += count
 
         # flipped version
-        train_dataset = MXDataset(root_dir=args.dataset)
+        train_dataset = MXDataset(root_dir=rec_path, flip_probability=1.0)
         dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=0, shuffle=False)
         for batch in tqdm(dataloader):
             img, tgt = batch
-            embedding, norm = model(img.cuda())
+            embedding, norm = net(img.cuda())
             sum_embedding, new_tgt, labels_count = groupby_ops(embedding.detach().cpu(), tgt, op='sum')
             for emb, tgt, count in zip(sum_embedding, new_tgt, labels_count):
                 center[tgt] += emb
@@ -91,5 +94,8 @@ if __name__ == '__main__':
     center = center / cul_count.unsqueeze(-1)
     center = center / torch.norm(center, 2, -1, keepdim=True)
 
-    torch.save({'center': center, 'model': args.pretrained_model_path, 'dataset': args.dataset},
-               os.path.join(args.save_dir, name))
+    torch.save({'center': center, 'model': model_path.as_posix(), 'dataset': rec_path.as_posix()},
+               (save_dir/name).as_posix())
+
+if __name__ == "__main__":
+    app()

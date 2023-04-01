@@ -144,13 +144,14 @@ class MXDataset(LabelConvertedMXFaceDataset):
     def __init__(self,
                  root_dir,
                  swap_color_order=False,
+                 flip_probability=0.0
                  ):
         super(MXDataset, self).__init__(root_dir,
                                         swap_color_order=swap_color_order,
                                         rec_label_to_another_label=None)
 
         self.transform = transforms.Compose([
-            transforms.RandomHorizontalFlip(p=0.0),
+            transforms.RandomHorizontalFlip(p=flip_probability),
             transforms.ToTensor(),
             transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         ])

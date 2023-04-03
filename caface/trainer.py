@@ -21,7 +21,7 @@ class Trainer(trainer_base.BaseTrainer):
         try:
             self.model = model.build_model(model_name=self.hparams.arch)
         except:
-            self.model = get_model(model_name=self.hparams.arch) 
+            self.model = get_model(self.hparams.arch, fp16=True) 
         
         # model responsible for CN and AGN
         fusion_model = fusion_net.build_fusion_net(model_name=self.hparams.decoder_name, hparams=self.hparams)

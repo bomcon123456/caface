@@ -1,8 +1,8 @@
 
 DATA_ROOT='<YOUR_CHOICE>'
 PRECOMPUTE_TRAIN_REC='adaface_webface4m_subset_ir101_style35_augmenterv3_fp16'
-BACKBONE_MODEL='../pretrained_models/AdaFaceWebFace4M.ckpt'
-CENTER_PATH='../pretrained_models/center_WebFace4MAdaFace_webface4m_subset.pth'
+BACKBONE_MODEL='/lustre/scratch/client/vinai/users/trungdt21/tmp/insightface/experiments/47788/ckpt/Backbone_Epoch_93_checkpoint.pth'
+CENTER_PATH='/lustre/scratch/client/guardpro/trungdt21/matching/data/training/WebFace4M/features/vit47788_centers/center_vit_l_dp005_mask_005_ckpt.pth'
 
 python main.py \
           --prefix hpcc_caface_adaface_catv9_g4_conf512_small \
@@ -11,9 +11,9 @@ python main.py \
           --start_from_model_statedict ${BACKBONE_MODEL} \
           --center_path ${CENTER_PATH} \
           --train_data_path WebFace4M \
-          --gpus 2 \
+          --gpus 8 \
           --wandb_tags ir_101_arcface \
-          --arch ir_101_arcface \
+          --arch vit_l_dp005_mask_005 \
           --tpus 0 \
           --num_workers 16 \
           --head adaface_v3 \

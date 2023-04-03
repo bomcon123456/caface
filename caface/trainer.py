@@ -10,6 +10,7 @@ from losses import cossim
 from nets import aggregator, fusion_net
 from functools import partial
 from utils import dist_utils
+from backbones import get_model
 
 
 class Trainer(trainer_base.BaseTrainer):
@@ -17,8 +18,11 @@ class Trainer(trainer_base.BaseTrainer):
         super(Trainer, self).__init__()
 
         # backbone face recognition model
-        self.model = model.build_model(model_name=self.hparams.arch)
-
+        try:
+            self.model = model.build_model(model_name=self.hparams.arch)
+        except:
+            self.model = get_model(model_name=self.hparams.arch) 
+        
         # model responsible for CN and AGN
         fusion_model = fusion_net.build_fusion_net(model_name=self.hparams.decoder_name, hparams=self.hparams)
         if fusion_model is not None:

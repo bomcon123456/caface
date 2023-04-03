@@ -233,6 +233,11 @@ class BaseTrainer(LightningModule):
                 split_dims = [128, 256]
                 split_index = [3, 5]
                 style_index_dict = dict(zip(split_index, np.arange(len(split_index))))
+            elif 'vit47788' in self.hparams.use_precompute_trainrec:
+                tot_styledim = 129 + 129
+                split_dims = [129, 129]
+                split_index = [3, 5]
+                style_index_dict = dict(zip(split_index, np.arange(len(split_index))))
             elif 'style3_space3':
                 tot_styledim = get_styledim('3,4')
                 split_dims = [128, 784]

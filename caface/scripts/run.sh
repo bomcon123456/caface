@@ -1,6 +1,6 @@
 
 DATA_ROOT='/lustre/scratch/client/scratch/guardpro/trungdt21/matching/data/caface/train'
-PRECOMPUTE_TRAIN_REC='vit47788_centers'
+PRECOMPUTE_TRAIN_REC='vit47788_extracted_features'
 BACKBONE_MODEL='/lustre/scratch/client/vinai/users/trungdt21/tmp/insightface/experiments/47788/ckpt/Backbone_Epoch_93_checkpoint.pth'
 CENTER_PATH='/lustre/scratch/client/guardpro/trungdt21/matching/data/training/WebFace4M/features/vit47788_centers/center_vit_l_dp005_mask_005_ckpt.pth'
 
@@ -11,7 +11,7 @@ WANDB_MODE=offline python main.py \
           --start_from_model_statedict ${BACKBONE_MODEL} \
           --center_path ${CENTER_PATH} \
           --train_data_path WebFace4MRec \
-          --gpus 8 \
+          --gpus 1 \
           --wandb_tags vit_l_dp005_mask_005 \
           --arch vit_l_dp005_mask_005 \
           --tpus 0 \

@@ -55,7 +55,8 @@ def main(
     save_dir: Path = typer.Argument(..., help="save dir path"),
 ):
     name = "center_{}_{}.pth".format(
-        backbone_name, model_path.parent)
+        backbone_name, model_path.parent.name)
+    save_dir.mkdir(exist_ok=True, parents=True)
     print('saving at')
     print(save_dir / name)
 

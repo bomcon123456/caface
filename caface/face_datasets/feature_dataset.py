@@ -39,11 +39,11 @@ class BaseMXFeatureDataset(Dataset):
         if not isinstance(label, numbers.Number):
             label = label[0]
         label = torch.tensor(label, dtype=torch.long)
-        if '16' in self.root_dir:
+        if '16' in self.root_dir or 'vit' in self.root_dir:
             sample = np.frombuffer(img, dtype=np.float16)
         else:
             sample = np.frombuffer(img, dtype=np.float32)
-
+        
         if len(sample) == 5 * 2432:
             # 5 aug + 1,3,5,7 style
             sample = sample.reshape(5, 2432)
@@ -67,6 +67,9 @@ class BaseMXFeatureDataset(Dataset):
             sample = sample.astype(np.float32)
         elif len(sample) == 16 * 2336:
             sample = sample.reshape(16, 2336)
+            sample = sample.astype(np.float32)
+        elif len(sample) == 16 * 2080:
+            sample = sample.reshape(16, 2080)
             sample = sample.astype(np.float32)
         else:
             raise ValueError('not impleented feature')

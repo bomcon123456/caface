@@ -300,7 +300,6 @@ class VisionTransformer(nn.Module):
         return x_masked, mask, ids_restore
 
     def make_style(self, x):
-        print(x.shape)
         B, C, P = x.shape
         mean = x.view(B, C, -1).mean(-1, keepdim=True)
         std = x.view(B, C, -1).std(-1, keepdim=True)

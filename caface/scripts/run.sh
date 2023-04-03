@@ -16,7 +16,6 @@ python main.py \
           --arch vit_l_dp005_mask_005 \
           --tpus 0 \
           --num_workers 16 \
-          --head adaface_v3 \
           --batch_size 512 \
           --val_batch_size 64 \
           --num_images_per_identity 32 \

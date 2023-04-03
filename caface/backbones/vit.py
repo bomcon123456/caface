@@ -381,5 +381,5 @@ if __name__ == "__main__":
         mask_ratio=0.05,
         using_checkpoint=True,
     )
-    out, norm, styles = model(torch.randn(2, 3, 112, 112), return_style=[3, 5, 7])
-    print(len(styles), styles[0].shape)
+    out, norm, styles = model(torch.randn(2, 3, 112, 112), return_style=[3, 5])
+    print(len(styles), styles[0].shape, styles[1].shape)

@@ -95,19 +95,13 @@ def extract_and_save_feature(i, item, q_out, augmenter, backbone, image_root):
     aug_samples = augmenter.make_aug_samples(fullpath, num_aug=16)
 
     feature, norm, intermediate = backbone(aug_samples.to("cuda:0"), return_style=[3,5])
-    for i_ in intermediate:
-        print("intermeidiate shape:", i_.shape)
 
     # reshape features
     mag_feature = feature * norm
-    intermediates = torch.cat(intermediate, dim=1) # [[16, 128, 2], [16, 256, 2]] -> [16, 384, 2]
-    print("Intermediate shape b1: ", intermediates.shape)
-    intermediates = intermediates.view(intermediates.shape[0], -1) # 16, 768
-    print("Intermediate shape b2: ", intermediates.shape)
-    save_features = torch.cat([mag_feature, intermediates], dim=1) # 16, 512 + 768 (1280)
-    print("savefeatures shape b1: ", save_features.shape)
+    intermediates = torch.cat(intermediate, dim=1) # [[16, 129, 2], [16, 129, 2]] -> [16, 258, 2]
+    intermediates = intermediates.view(intermediates.shape[0], -1) # 16, 516
+    save_features = torch.cat([mag_feature, intermediates], dim=1) # 16, 512 + 516 (1028)
     save_features = save_features.view(-1)  # 20480
-    print("savefeatures shape b2: ", save_features.shape)
     save_features_np = save_features.detach().cpu().numpy()
     save_features_np_fp16 = save_features_np.astype(np.float16)
 

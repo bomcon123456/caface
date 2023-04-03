@@ -235,4 +235,8 @@ def iresnet200(pretrained=False, progress=True, **kwargs):
 
 if __name__ == '__main__':
     model = iresnet100()
-    model(torch.randn(2,3,112,112), return_style=[3,5,7], return_space=[3,5,7])
+    a,b,c = model(torch.randn(2,3,112,112), return_style=[3,5])
+    print(a.shape)
+    print(len(c))
+    print(c[0].shape)
+    print(c[1].shape)

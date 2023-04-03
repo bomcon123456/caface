@@ -334,7 +334,7 @@ class VisionTransformer(nn.Module):
                 x = func(x)
             if idx in return_styles:
                 styles.append(self.make_style(x))
-                spatials.append(self.make_spatial(x))
+                # spatials.append(self.make_spatial(x))
 
         x = self.norm(x.float())
 

@@ -1,45 +1,9 @@
-from .iresnet import iresnet18, iresnet34, iresnet50, iresnet100, iresnet200
-from .resnet import ResNet_50, ResNet_101, ResNet_152, ResNet_200
-from .mobilefacenet import get_mbf
-
 
 def get_model(name, **kwargs):
     # resnet
     export_onnx = kwargs.get("export_onnx", False)
-    if name == "r18":
-        return iresnet18(False)
-    elif name == "r34":
-        return iresnet34(False)
-    elif name == "r50":
-        return iresnet50(False)
-    elif name == "r100":
-        return iresnet100(False)
-    elif name == "r200":
-        return iresnet200(False)
-    elif name == "r2060":
-        from .iresnet2060 import iresnet2060
-        return iresnet2060(False)
-    elif name == "resnet50":
-        return ResNet_50([112,112], export_onnx=export_onnx)
-    elif name == "resnet101":
-        return ResNet_101([112,112], export_onnx=export_onnx)
-    elif name == "resnet152":
-        return ResNet_152([112,112], export_onnx=export_onnx)
-    elif name == "resnet200":
-        return ResNet_200([112,112], export_onnx=export_onnx)
 
-    elif name == "mbf":
-        fp16 = kwargs.get("fp16", False)
-        num_features = kwargs.get("num_features", 512)
-        return get_mbf(fp16=fp16, num_features=num_features)
-
-    elif name == "mbf_large":
-        from .mobilefacenet import get_mbf_large
-        fp16 = kwargs.get("fp16", False)
-        num_features = kwargs.get("num_features", 512)
-        return get_mbf_large(fp16=fp16, num_features=num_features)
-
-    elif name == "vit_t":
+    if name == "vit_t":
         num_features = kwargs.get("num_features", 512)
         from .vit import VisionTransformer
         return VisionTransformer(

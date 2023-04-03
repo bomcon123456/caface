@@ -4,7 +4,7 @@ PRECOMPUTE_TRAIN_REC='vit47788_centers'
 BACKBONE_MODEL='/lustre/scratch/client/vinai/users/trungdt21/tmp/insightface/experiments/47788/ckpt/Backbone_Epoch_93_checkpoint.pth'
 CENTER_PATH='/lustre/scratch/client/guardpro/trungdt21/matching/data/training/WebFace4M/features/vit47788_centers/center_vit_l_dp005_mask_005_ckpt.pth'
 
-python main.py \
+WANDB_MODE=offline python main.py \
           --prefix vit47788_test \
           --data_root ${DATA_ROOT} \
           --use_precompute_trainrec ${PRECOMPUTE_TRAIN_REC} \

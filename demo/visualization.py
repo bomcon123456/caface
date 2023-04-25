@@ -14,29 +14,73 @@ def calc_cossim(features1, features2):
     return cossims
 
 
-def make_similarity_plot(save_path,
-                         probe_features, probe_weights, probe_fused_feature, probe_image_list,
-                         gallery_feature, gallery_image):
+def make_similarity_plot(
+    save_path,
+    probe_features,
+    probe_weights,
+    probe_fused_feature,
+    probe_image_list,
+    gallery_feature,
+    gallery_image,
+):
     indv_similarities = calc_cossim(probe_features, gallery_feature)
-    fused_similarity = calc_cossim(np.expand_dims(probe_fused_feature, 0), gallery_feature)
-    draw_similarity_plot(save_path, indv_similarities, fused_similarity,
-                         transparency=probe_weights,
-                         images=probe_image_list, ref_image=np.array(gallery_image))
+    fused_similarity = calc_cossim(
+        np.expand_dims(probe_fused_feature, 0), gallery_feature
+    )
+    draw_similarity_plot(
+        save_path,
+        indv_similarities,
+        fused_similarity,
+        transparency=probe_weights,
+        images=probe_image_list,
+        ref_image=np.array(gallery_image),
+    )
 
 
-def draw_similarity_plot(save_path, similarities, special_values, transparency=[], images=[], ref_image=None):
+def make_similarity_plot_multiple(
+    save_path,
+    probe_features,
+    probe_weightss,
+    probe_fused_features,
+    probe_image_list,
+    gallery_feature,
+    gallery_image,
+    fusion_methods,
+    fusion_idx,
+):
+    specials = []
+    indv_similarities = calc_cossim(probe_features, gallery_feature)
+    for probe_fused_feature, probe_weights in zip(probe_fused_features, probe_weightss):
+        fused_similarity = calc_cossim(
+            np.expand_dims(probe_fused_feature, 0), gallery_feature
+        )
+        specials.append(fused_similarity)
+    draw_similarity_plot(
+        save_path,
+        indv_similarities,
+        specials,
+        transparency=probe_weightss[fusion_idx],
+        images=probe_image_list,
+        ref_image=np.array(gallery_image),
+        fusion_methods=fusion_methods,
+    )
+
+
+def draw_similarity_plot(
+    save_path, similarities, special_values, transparency=[], images=[], ref_image=None, fusion_methods=None
+):
     np.random.seed(2)
 
     if ref_image is not None:
-        x = [['A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'B']]
+        x = [["A", "A", "A", "A", "A", "A", "A", "A", "B"]]
     else:
-        x = [['A']]
+        x = [["A"]]
     fig, axes = plt.subplot_mosaic(mosaic=x, figsize=(30, 5))
-    ax = axes['A']
+    ax = axes["A"]
 
-    marker = 'o'
+    marker = "o"
     size = 20
-    plt.rcParams.update({'font.size': 20})
+    plt.rcParams.update({"font.size": 20})
 
     if len(transparency) > 0:
         assert len(transparency) == len(similarities)
@@ -58,17 +102,41 @@ def draw_similarity_plot(save_path, similarities, special_values, transparency=[
         ax.scatter(value, y_coord, s=size * 5, marker=marker, color=color, alpha=0.8)
         y_coords.append(y_coord)
 
-    ax.scatter(special_values, 0, s=size * 50, marker="*", color='black', alpha=0.8)
-    if 'average' in save_path:
-        tag = 'AVG'
-    elif 'cluster_and_aggregate' in save_path:
-        tag = "CAFace"
+    heights = np.arange(-0.5, 0.5, 1/len(special_values))
+    ax.scatter(special_values, heights, s=size * 50, marker="*", color="black", alpha=0.8)
+    if len(special_values) == 1:
+        if "average" in save_path:
+            tag = "AVG"
+        elif "cluster_and_aggregate" in save_path:
+            tag = "CAFace"
+        elif "naive" in save_path:
+            tag = "naive"
+        else:
+            raise ValueError("not implemented yet")
+        ax.annotate(
+            tag,
+            (special_values[0], 0),
+            fontsize=15,
+            va="center",
+            xytext=(18, 0),
+            textcoords="offset points",
+        )
     else:
-        raise ValueError('not implemented yet')
-    ax.annotate(tag, (special_values[0], 0), fontsize=15, va='center', xytext=(18, 0), textcoords="offset points")
+        for special_value, tag, height in zip(special_values, fusion_methods, heights):
+            ax.annotate(
+                tag,
+                (special_value, height),
+                fontsize=15,
+                va="center",
+                xytext=(18, 0),
+                textcoords="offset points",
+            )
+            
 
     # set axis label
-    ax.set_xlabel('Cosine Similarity between Gallery and Individual Probe', fontdict={'size': 20})
+    ax.set_xlabel(
+        f"Cosine Similarity between Gallery and Individual Probe (nprobes={len(similarities)})", fontdict={"size": 20}
+    )
     ax.set_yticks([])
     # ax.set_xticks(ax.get_xticks(), fontsize=100)
     ax.xaxis.set_tick_params(labelsize=20)
@@ -76,13 +144,21 @@ def draw_similarity_plot(save_path, similarities, special_values, transparency=[
     # set color bar
     cmap = mpl.cm.jet
     norm = mpl.colors.Normalize(vmin=transparency.min(), vmax=transparency.max())
-    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax,
-                 orientation='vertical', label='Sample Weights', location='left', pad=0.01)
+    fig.colorbar(
+        mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+        ax=ax,
+        orientation="vertical",
+        label="Sample Weights",
+        location="left",
+        pad=0.01,
+    )
 
     if len(images) > 0:
         assert len(images) == len(similarities)
-        shown_images = np.array([[1., 1.]])  # just something big
-        for x_value, y_coord, img_path, alpha in zip(similarities, y_coords, images, alphas):
+        shown_images = np.array([[1.0, 1.0]])  # just something big
+        for x_value, y_coord, img_path, alpha in zip(
+            similarities, y_coords, images, alphas
+        ):
             image_y = 2.0
             img_coord = np.array([x_value, image_y])
             dist = np.sum((img_coord - shown_images) ** 2, 1)
@@ -101,17 +177,17 @@ def draw_similarity_plot(save_path, similarities, special_values, transparency=[
             imagebox = offsetbox.AnnotationBbox(
                 offsetbox.OffsetImage(img_tiny, cmap=plt.cm.gray_r),
                 img_coord,
-                bboxprops=dict(edgecolor=color))
+                bboxprops=dict(edgecolor=color),
+            )
             ax.add_artist(imagebox)
-    plt.title(' ', fontdict={'size': 100})
+    plt.title(" ", fontdict={"size": 100})
 
     if ref_image is not None:
-        axes['B'].imshow(ref_image)
-        axes['B'].set_yticks([])
-        axes['B'].set_xticks([])
+        axes["B"].imshow(ref_image)
+        axes["B"].set_yticks([])
+        axes["B"].set_xticks([])
 
     plt.tight_layout()
     plt.savefig(save_path)
     plt.clf()
     plt.cla()
-

@@ -14,3 +14,5 @@ IJBC__result
 result
 experiments/
 *.pyc
+*.npy
+demo/*out*

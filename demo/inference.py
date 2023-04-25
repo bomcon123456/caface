@@ -32,7 +32,8 @@ def infer_features(dataloader, model, aggregator, hyper_param, device='cuda:0'):
     intermediates = np.concatenate(intermediates, axis=0)
     return features, intermediates
 
-
+def l2_normalize(x, axis=1, eps=1e-8):
+    return x / (np.linalg.norm(x, axis=axis, keepdims=True) + eps)
 
 def fuse_feature(features, aggregator=None, intermediates=None, method='cluster_and_aggregate', device='cuda:0'):
     if len(features) == 1:
@@ -45,9 +46,15 @@ def fuse_feature(features, aggregator=None, intermediates=None, method='cluster_
                                                 features=torch.tensor(features).float().to(device).unsqueeze(0),
                                                 intermediate=torch.tensor(intermediates).float().to(device).unsqueeze(0),
                                                 max_element=512)
-    elif method == 'average':
-        fused = features.mean(0)
+    elif method == 'norm_weight':
+        fused = np.zeros(features.shape[1])
         weights = np.linalg.norm(features, 2, -1) / np.linalg.norm(features, 2, -1).sum()
+        for feat, w in zip(features, weights):
+            fused += w*feat
+        fused = l2_normalize(fused,-1)
+    elif method == 'average':
+        fused = l2_normalize(features.mean(0), -1)
+        weights = np.ones(len(features))/ len(features)
     else:
         raise ValueError('not a correct value for fusion method')
 

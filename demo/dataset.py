@@ -1,6 +1,7 @@
 import re
 import cv2
 import os
+from pathlib import Path
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
@@ -43,7 +44,10 @@ class ListDatasetWithIndex(Dataset):
     def __getitem__(self, idx):
 
         # load in BGR format as AdaFace model requires
-        img = cv2.imread(self.img_list[idx])
+        image_path = self.img_list[idx]
+        if isinstance(image_path, Path):
+            image_path = image_path.as_posix()
+        img = cv2.imread(image_path)
         if img is None:
             print(self.img_list[idx])
             raise ValueError(self.img_list[idx])

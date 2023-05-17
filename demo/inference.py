@@ -1,10 +1,9 @@
+import numpy as np
 import torch
 from tqdm import tqdm
-import numpy as np
 
 
-def infer_features(dataloader, model, aggregator, hyper_param, device='cuda:0'):
-
+def infer_features(dataloader, model, aggregator, hyper_param, device="cuda:0"):
     features = []
     norms = []
     intermediates = []
@@ -14,14 +13,18 @@ def infer_features(dataloader, model, aggregator, hyper_param, device='cuda:0'):
             assert idx.max().item() >= prev_max_idx
             prev_max_idx = idx.max().item()  # order shifting by dataloader checking
 
-            if hyper_param.intermediate_type == 'map':
-                feature, norm, intermediate = model(img.to(device), return_intermediate=True)
+            if hyper_param.intermediate_type == "map":
+                feature, norm, intermediate = model(
+                    img.to(device), return_intermediate=True
+                )
                 compressed_intermediate = aggregator.compress_intermediate(intermediate)
-            elif hyper_param.intermediate_type == 'style':
-                feature, norm, intermediate = model(img.to(device), return_style=hyper_param.style_index)
+            elif hyper_param.intermediate_type == "style":
+                feature, norm, intermediate = model(
+                    img.to(device), return_style=hyper_param.style_index
+                )
                 compressed_intermediate = aggregator.compress_intermediate(intermediate)
             else:
-                raise ValueError('not a correct intermediate')
+                raise ValueError("not a correct intermediate")
 
             feature = feature * norm
             features.append(feature.cpu().numpy())
@@ -32,31 +35,53 @@ def infer_features(dataloader, model, aggregator, hyper_param, device='cuda:0'):
     intermediates = np.concatenate(intermediates, axis=0)
     return features, intermediates
 
+
 def l2_normalize(x, axis=1, eps=1e-8):
     return x / (np.linalg.norm(x, axis=axis, keepdims=True) + eps)
 
-def fuse_feature(features, aggregator=None, intermediates=None, method='cluster_and_aggregate', device='cuda:0'):
+
+def fuse_feature(
+    features,
+    aggregator=None,
+    intermediates=None,
+    method="cluster_and_aggregate",
+    running_avg_alpha=0.5,
+    device="cuda:0",
+):
     if len(features) == 1:
         fused = features[0]
         weights = np.ones(1)
         return fused, weights
 
-    if method == 'cluster_and_aggregate':
-        fused, weights = aggregator_caface_fuse(aggregator=aggregator,
-                                                features=torch.tensor(features).float().to(device).unsqueeze(0),
-                                                intermediate=torch.tensor(intermediates).float().to(device).unsqueeze(0),
-                                                max_element=512)
-    elif method == 'norm_weight':
+    if method == "cluster_and_aggregate":
+        fused, weights = aggregator_caface_fuse(
+            aggregator=aggregator,
+            features=torch.tensor(features).float().to(device).unsqueeze(0),
+            intermediate=torch.tensor(intermediates).float().to(device).unsqueeze(0),
+            max_element=512,
+        )
+    elif method == "norm_weight":
         fused = np.zeros(features.shape[1])
-        weights = np.linalg.norm(features, 2, -1) / np.linalg.norm(features, 2, -1).sum()
+        weights = (
+            np.linalg.norm(features, 2, -1) / np.linalg.norm(features, 2, -1).sum()
+        )
         for feat, w in zip(features, weights):
-            fused += w*feat
-        fused = l2_normalize(fused,-1)
-    elif method == 'average':
+            fused += w * feat
+        fused = l2_normalize(fused, -1)
+    elif method == "average":
         fused = l2_normalize(features.mean(0), -1)
-        weights = np.ones(len(features))/ len(features)
+        weights = np.ones(len(features)) / len(features)
+    elif method == "running_avg":
+        fused = features[0]
+        for idx in range(1, features.shape[0]):
+            fused = (1 - running_avg_alpha) * fused + running_avg_alpha * features[idx]
+        fused = l2_normalize(fused, -1)
+        weights = np.ones(len(features)) / len(features)
+    elif method == "naive":
+        fused = l2_normalize(features[-1], -1)
+        weights = np.ones(len(features)) / len(features)
     else:
-        raise ValueError('not a correct value for fusion method')
+        raise ValueError("not a correct value for fusion method")
 
     return fused, weights
 
@@ -74,12 +99,14 @@ def aggregator_caface_fuse(aggregator, features, intermediate, max_element=512):
     def infer_with(aggregator, features, interms):
         agg_result = aggregator(features, interms)
 
-        weights = agg_result['confidence_weight'].detach().cpu().numpy()
-        assignment = agg_result['attn_dict_list'][0]['attn'][0][0].detach().cpu().numpy()
+        weights = agg_result["confidence_weight"].detach().cpu().numpy()
+        assignment = (
+            agg_result["attn_dict_list"][0]["attn"][0][0].detach().cpu().numpy()
+        )
         # influence = assignment / assignment.sum(-1, keepdims=True)
         # weights = (influence * np.expand_dims(weights.mean(-1)[0], -1)).sum(0)
 
-        aggregated = agg_result['aggregated']
+        aggregated = agg_result["aggregated"]
         aggregated_np = aggregated.squeeze(0).detach().cpu().numpy()
         return aggregated_np, weights, assignment
 
@@ -100,7 +127,9 @@ def aggregator_caface_fuse(aggregator, features, intermediate, max_element=512):
                 subinterm = subinterm[:, ~nan_index, :]
                 if split_idx == 0:
                     aggregator.memory_count = 0
-                fused, _weights, _assignment = infer_with(aggregator, subfeature, subinterm)
+                fused, _weights, _assignment = infer_with(
+                    aggregator, subfeature, subinterm
+                )
                 weights.append(_weights)
                 assignment.append(_assignment)
         fused_np = l2_normalize(fused, axis=0)
@@ -118,4 +147,3 @@ def aggregator_caface_fuse(aggregator, features, intermediate, max_element=512):
         aggregator.memory_count = 0
 
     return fused_np, weights
-

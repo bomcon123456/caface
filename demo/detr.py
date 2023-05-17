@@ -318,7 +318,7 @@ def eval_multiple_gallery(
     fusion_method: str = typer.Option("average", help="fusion method"),
     running_avg_alpha: float = typer.Option(0.5, help="running avg alpha"),
     gallery_paths: List[Path] = typer.Option([], help="Path to gallery images"),
-    gallery_size: str = typer.Option("150,250,500,1000,2500,5000,10000,15000,20000,25000", help="gallery step")
+    gallery_size: str = typer.Option("150,250,500,1000,2500,5000,10000,15000,20000", help="gallery step")
 ):
     assert len(gallery_paths) > 0, "Gallery must not be empty!"
     gallery_joint_name = "_".join(list(map(lambda x: x.stem, gallery_paths)))

@@ -53,9 +53,9 @@ def get_features(
             tmp = {}
             for line in lines:
                 filename, score = line.strip().split("\t")
-                tmp[filename] = score
+                tmp[filename] = float(score)
             # normalize score
-            scores_npy = np.array(score)
+            scores_npy = np.array(list(tmp.values()))
             scores_npy = (scores_npy - min(scores_npy)) / (
                 max(scores_npy) - min(scores_npy)
             )
@@ -67,11 +67,13 @@ def get_features(
     exp_dir = (
         f"{ckpt_path.stem}/{gallery_joint_name}_{mate_path.stem}_{nonmate_path.stem}"
     )
+    basecache_dir = CACHE_FOLDER / f"{exp_dir}"
+    basecache_dir.mkdir(parents=True, exist_ok=True)
     output_dir = output_dir / f"{exp_dir}/{fusion_method}"
     output_dir.mkdir(parents=True, exist_ok=True)
     gallery_ids = []
     gallery_id_paths = []
-    path_cache = CACHE_FOLDER / f"{exp_dir}/paths.npy"
+    path_cache = basecache_dir / f"paths.npy"
     if path_cache.exists():
         d_ = np.load(path_cache.as_posix(), allow_pickle=True).item()
         gallery_ids = d_.get("gallery_ids")
@@ -102,13 +104,15 @@ def get_features(
     # load caface
     aggregator, model, hyper_param = load_caface(ckpt_path, device=device)
 
-    gallery_cache = CACHE_FOLDER / f"{exp_dir}/gallery.npy"
-    matefeats_nonfused_cache = CACHE_FOLDER / f"{exp_dir}/mate_features.npy"
-    mateints_nonfused_cache = CACHE_FOLDER / f"{exp_dir}/mate_intermediates.npy"
-    mate_scores_cache = CACHE_FOLDER / f"{exp_dir}/mate_score_{score_method}.npy"
-    nonmatefeats_nonfused_cache = CACHE_FOLDER / f"{exp_dir}/nonmate_features.npy"
-    nonmateints_nonfused_cache = CACHE_FOLDER / f"{exp_dir}/nonmate_intermediates.npy"
-    nonmate_scores_cache = CACHE_FOLDER / f"{exp_dir}/nonmate_score_{score_method}.npy"
+    gallery_cache = basecache_dir / f"gallery.npy"
+    matefeats_nonfused_cache = basecache_dir / f"mate_features.npy"
+    mateints_nonfused_cache = basecache_dir / f"mate_intermediates.npy"
+    mate_scores_cache = basecache_dir / f"mate_score_{score_method}.npy"
+    mate_loaded_paths_cache = basecache_dir / f"mate_paths.npy"
+    nonmatefeats_nonfused_cache = basecache_dir / f"nonmate_features.npy"
+    nonmateints_nonfused_cache = basecache_dir / f"nonmate_intermediates.npy"
+    nonmate_scores_cache = basecache_dir / f"nonmate_score_{score_method}.npy"
+    nonmate_loaded_paths_cache = basecache_dir / f"nonmate_paths.npy"
     gallery_cache.parent.mkdir(exist_ok=True, parents=True)
 
     if gallery_cache.exists():
@@ -164,7 +168,19 @@ def get_features(
         )
         mate_scores = None
         if fusion_method == "scores_txt":
-            mate_scores = np.load(mate_scores_cache)
+            if mate_scores_cache.exists():
+                mate_scores = np.load(mate_scores_cache)
+            else:
+                loaded_paths_cache = np.load(mate_loaded_paths_cache, allow_pickle=True)
+                mate_scores = []
+                for probe_paths in loaded_paths_cache:
+                    cur_id_scores = [
+                        score_dict[img_path.relative_to(mate_path).as_posix()]
+                        for img_path in probe_paths
+                    ]
+                    mate_scores.append(cur_id_scores)
+
+
             assert len(mate_nonfused_features) == len(mate_scores)
         assert len(mate_nonfused_features) == len(mate_nonfused_intermediates)
 
@@ -192,6 +208,7 @@ def get_features(
         mate_nonfused_features = []
         mate_nonfused_intermediates = []
         mate_scores = []
+        mate_loaded_paths = []
         mate_features = np.zeros((len(final_mate_folders), feature_size))
         mate_pbar = tqdm(final_mate_folders)
         mate_pbar.set_description("Mate extraction")
@@ -199,6 +216,7 @@ def get_features(
             id_path = mate_path / mate_id
 
             mate_images = list(id_path.glob("*.[jp][pn]g"))
+            mate_loaded_paths.append(mate_images)
             cur_id_scores = None
             if fusion_method == "scores_txt":
                 cur_id_scores = [
@@ -208,7 +226,7 @@ def get_features(
                 mate_scores.append(cur_id_scores)
 
             dataloader = prepare_imagelist_dataloader(
-                mate_images, batch_size=16, num_workers=0
+                mate_images, batch_size=64, num_workers=0
             )
             probe_features, probe_intermediates = infer_features(
                 dataloader, model, aggregator, hyper_param, device=device
@@ -229,6 +247,7 @@ def get_features(
         mate_nonfused_intermediates = np.array(mate_nonfused_intermediates)
         np.save(matefeats_nonfused_cache, mate_nonfused_features)
         np.save(mateints_nonfused_cache, mate_nonfused_intermediates)
+        np.save(mate_loaded_paths_cache, mate_loaded_paths)
         if fusion_method == "scores_txt":
             np.save(mate_scores_cache, mate_scores)
 
@@ -244,11 +263,20 @@ def get_features(
             nonmateints_nonfused_cache, allow_pickle=True
         )
         assert len(nonmate_nonfused_features) == len(nonmate_nonfused_intermediates)
+
         nonmate_scores = None
         if fusion_method == "scores_txt":
-            nonmate_scores = np.load(nonmate_scores_cache)
-            assert len(nonmate_nonfused_features) == len(nonmate_scores)
-        assert len(nonmate_nonfused_features) == len(nonmate_nonfused_intermediates)
+            if nonmate_scores_cache.exists():
+                nonmate_scores = np.load(nonmate_scores_cache)
+            else:
+                loaded_paths_cache = np.load(nonmate_loaded_paths_cache, allow_pickle=True)
+                nonmate_scores = []
+                for probe_paths in loaded_paths_cache:
+                    cur_id_scores = [
+                        score_dict[img_path.relative_to(nonmate_path).as_posix()]
+                        for img_path in probe_paths
+                    ]
+                    nonmate_scores.append(cur_id_scores)
 
         nonmate_features = np.zeros((len(nonmate_ids), feature_size))
         for nonmate_idx, (probe_features, probe_intermediates) in enumerate(
@@ -276,12 +304,14 @@ def get_features(
         nonmate_nonfused_features = []
         nonmate_nonfused_intermediates = []
         nonmate_scores = []
+        nonmate_loaded_paths = []
         for nonmate_idx, nonmate_id in enumerate(
             tqdm(nonmate_ids, desc="Nonmate extraction")
         ):
             id_path = nonmate_path / nonmate_id
 
             nonmate_images = list(id_path.glob("*.[jp][pn]g"))
+            nonmate_loaded_paths.append(nonmate_images)
 
             cur_id_scores = None
             if fusion_method == "scores_txt":
@@ -292,7 +322,7 @@ def get_features(
                 nonmate_scores.append(cur_id_scores)
 
             dataloader = prepare_imagelist_dataloader(
-                nonmate_images, batch_size=16, num_workers=0
+                nonmate_images, batch_size=64, num_workers=0
             )
             probe_features, probe_intermediates = infer_features(
                 dataloader, model, aggregator, hyper_param, device=device
@@ -311,6 +341,7 @@ def get_features(
             nonmate_features[nonmate_idx] = probe_fused_feature
         np.save(nonmatefeats_nonfused_cache, nonmate_nonfused_features)
         np.save(nonmateints_nonfused_cache, nonmate_nonfused_intermediates)
+        np.save(nonmate_loaded_paths_cache, nonmate_loaded_paths)
         if fusion_method == "scores_txt":
             np.save(nonmate_scores_cache, nonmate_scores)
     return (
@@ -324,7 +355,7 @@ def get_features(
     )
 
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_show_locals=False)
 
 
 @app.command()

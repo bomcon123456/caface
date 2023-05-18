@@ -426,9 +426,9 @@ def eval(
         FP = np.sum(nonmate_accept_ids)
 
         # Calculate FPIR
-        FPIR = FP / num_mate_searchs
+        FPIR = FP / num_nonmate_searchs
         # Calculate FNIR
-        FNIR = FN / num_nonmate_searchs
+        FNIR = FN / num_mate_searchs
         fpirs.append(FPIR)
         fnirs.append(FNIR)
         if threshold in [0.3, 0.4, 0.5]:
@@ -554,9 +554,9 @@ def eval_multiple_gallery(
             FP = np.sum(nonmate_accept_ids)
 
             # Calculate FPIR
-            FPIR = FP / num_mate_searchs
+            FPIR = FP / num_nonmate_searchs
             # Calculate FNIR
-            FNIR = FN / num_nonmate_searchs
+            FNIR = FN / num_mate_searchs
             fpirs.append(FPIR)
             fnirs.append(FNIR)
             if threshold in [0.3, 0.4, 0.5]:
@@ -567,7 +567,7 @@ def eval_multiple_gallery(
                 print(f"FNIR@{threshold}@gs{gallery_size}: {FNIR}")
 
         np.save(
-            output_dir / "{gallery_size}_fpir_fnir.npy", {"FNIR": fnirs, "FPIR": fpirs}
+            output_dir / f"{gallery_size}_fpir_fnir.npy", {"FNIR": fnirs, "FPIR": fpirs}
         )
 
 
@@ -647,6 +647,108 @@ def plot_multiple(
 
         ax1.plot(fpirs, fnirs, linestyle="solid", label=legend_name)
     # plt.savefig((output_dir / f"det_curve.png").as_posix())
+
+    colormap = plt.cm.Dark2  # nipy_spectral, Set1,Paired
+    colors = [colormap(i) for i in np.linspace(0, 0.7, len(ax1.lines))]
+    for i, j in enumerate(ax1.lines):
+        j.set_color(colors[i])
+
+    ax1.set_title(
+        f"DETR Curve",
+        fontsize=20,
+    )
+    ax1.legend()
+    ax1.set_xlabel("False Positive Identification Rate", fontsize=16)
+    ax1.set_ylabel("False Negative Identification Rate", fontsize=16)
+    fig1.savefig((output_dir / f"det_curve.png").as_posix())
+
+
+@app.command()
+def plot_multi_gallery(
+    exp_path: Path = typer.Argument(..., help="Experiment folders"),
+    output_dir: Path = typer.Argument(..., help="Output dir"),
+    override_legend: Optional[List[str]] = typer.Option(
+        None, "--override", "-o", help="default will be exp folder name"
+    ),
+):
+
+    fig1 = plt.figure(figsize=(15, 7))
+    ax1 = fig1.add_subplot(111)
+    x_labels = [0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
+    yticks = np.array(
+        [
+            0.0,
+            0.010,
+            0.020,
+            0.030,
+            0.040,
+            0.050,
+            0.070,
+            0.100,
+            0.200,
+            0.300,
+            0.400,
+            0.500,
+            0.600,
+            0.700,
+            0.800,
+            0.900,
+            1.0,
+        ]
+    )
+    xticks = np.array([0.000001, *x_labels, 1.3])
+    xticks_l = ["", "0.0003", "0.001", "0.003", "0.01", "0.03", "0.1", "0.3", "1", ""]
+    yticks_l = [
+        "",
+        "0.010",
+        "0.020",
+        "0.030",
+        "0.040",
+        "0.050",
+        "0.070",
+        "0.100",
+        "0.200",
+        "0.300",
+        "0.400",
+        "0.500",
+        "0.600",
+        "0.700",
+        "0.800",
+        "0.900",
+        "",
+    ]
+
+    ax1.set_xscale("log")
+    ax1.set_yscale("log")
+    ax1.set_yticks(yticks)
+    ax1.set_xticks(xticks)
+    ax1.xaxis.set_ticklabels(xticks_l)
+    ax1.yaxis.set_ticklabels(yticks_l)
+    ax1.set_xlim(left=0.0002, right=1.3)
+    ax1.set_ylim(bottom=0.08, top=1.0)
+    ax1.text(0.002, y=0.1, s="Identification seldom\n uses human review", color="blue")
+    ax1.text(0.45, y=0.1, s="Identification always\n uses human review", color="blue")
+    ax1.grid(linestyle="--")
+
+    # plt.figure(figsize=(15, 7))
+    files = list(exp_path.glob("*.npy"))
+    if override_legend is None or len(override_legend) == 0:
+        override_legend = [f'Gallery size: {file.stem.split("_")[0]}' for file in files]
+    for filepath, legend_name in zip(files, override_legend):
+        d = np.load(filepath.as_posix(), allow_pickle=True).item()
+        fpirs, fnirs = d["FPIR"], d["FNIR"]
+        ax1.plot(fpirs, fnirs, linestyle="solid", label=legend_name)
+        TARGET_FPIR = 3e-3
+        diff = np.array(fpirs) - TARGET_FPIR
+        diff_mask = np.ma.MaskedArray(diff, diff >= 0)
+        min_index = np.ma.argmin(diff_mask)    # == 6
+        print(fpirs)
+        print(min_index)
+        fnir = fnirs[min_index]
+        fpir = fpirs[min_index]
+        print(f"fpir={fpir}, fnir={fnir}")
+        exit()
+
 
     colormap = plt.cm.Dark2  # nipy_spectral, Set1,Paired
     colors = [colormap(i) for i in np.linspace(0, 0.7, len(ax1.lines))]

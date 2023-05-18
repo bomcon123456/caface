@@ -46,6 +46,7 @@ def fuse_feature(
     intermediates=None,
     method="cluster_and_aggregate",
     running_avg_alpha=0.5,
+    scores=None,
     device="cuda:0",
 ):
     if len(features) == 1:
@@ -80,6 +81,13 @@ def fuse_feature(
     elif method == "naive":
         fused = l2_normalize(features[-1], -1)
         weights = np.ones(len(features)) / len(features)
+    elif method == "scores_txt":
+        assert scores is not None, "Scores array should not be None"
+        fused = np.zeros(features.shape[1])
+        weights = scores
+        for feat, w in zip(features, weights):
+            fused += w * feat
+        fused = l2_normalize(fused, -1)
     else:
         raise ValueError("not a correct value for fusion method")
 

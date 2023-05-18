@@ -88,7 +88,7 @@ def eval(
             fs = np.array(fs)
             gallery_feature = l2_normalize(np.array(fs).mean(0))
             gallery_features[gallery_idx] = gallery_feature
-            np.save(gallery_cache, gallery_features)
+        np.save(gallery_cache, gallery_features)
 
     print("Gallery feature shape: ", gallery_features.shape)
     mate_folders = os.listdir(mate_path)

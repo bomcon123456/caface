@@ -12,8 +12,7 @@ from tqdm import tqdm
 from natsort import natsorted
 from prettytable import PrettyTable
 
-sys.path.append("/home/termanteus/workspace/face/code/caface/demo")
-sys.path.append("/home/termanteus/workspace/face/code/caface")
+sys.path.append("../")
 
 CACHE_FOLDER = Path("./cache")
 CACHE_FOLDER.mkdir(parents=True, exist_ok=True)
@@ -110,7 +109,7 @@ def eval(
             fs = np.array(fs)
             gallery_feature = l2_normalize(np.array(fs).mean(0))
             gallery_features[gallery_idx] = gallery_feature
-            np.save(gallery_cache, gallery_features)
+        np.save(gallery_cache, gallery_features)
 
     print("Gallery feature shape: ", gallery_features.shape)
     mate_folders = os.listdir(mate_path)
@@ -305,6 +304,7 @@ def eval(
     np.save((output_dir / f"fpir.npy").as_posix(), fpirs)
     np.save((output_dir / f"fnir.npy").as_posix(), fnirs)
 
+
 @app.command()
 def eval_multiple_gallery(
     mate_path: Path = typer.Argument(..., help="Path to mate images"),
@@ -318,27 +318,41 @@ def eval_multiple_gallery(
     fusion_method: str = typer.Option("average", help="fusion method"),
     running_avg_alpha: float = typer.Option(0.5, help="running avg alpha"),
     gallery_paths: List[Path] = typer.Option([], help="Path to gallery images"),
-    gallery_size: str = typer.Option("150,250,500,1000,2500,5000,10000,15000,20000", help="gallery step")
+    gallery_size: str = typer.Option(
+        "150,250,500,1000,2500,5000,10000,15000,20000", help="gallery step"
+    ),
 ):
     assert len(gallery_paths) > 0, "Gallery must not be empty!"
     gallery_joint_name = "_".join(list(map(lambda x: x.stem, gallery_paths)))
-    exp_dir = f"{ckpt_path.stem}/{gallery_joint_name}_{mate_path.stem}_{nonmate_path.stem}"
-    output_dir = (
-        output_dir
-        / f"{exp_dir}/{fusion_method}"
+    exp_dir = (
+        f"{ckpt_path.stem}/{gallery_joint_name}_{mate_path.stem}_{nonmate_path.stem}"
     )
+    output_dir = output_dir / f"{exp_dir}/{fusion_method}"
     output_dir.mkdir(parents=True, exist_ok=True)
     gallery_ids = []
     gallery_id_paths = []
-    for gallery_path in gallery_paths:
-        gallery_ids_tmp = os.listdir(gallery_path)
-        gallery_ids_tmp = natsorted(
-            filter(lambda x: len(list(os.listdir(gallery_path / x))) > 0, gallery_ids_tmp)
+    path_cache = CACHE_FOLDER / f"{exp_dir}/paths.npy"
+    if path_cache.exists():
+        d_ = np.load(path_cache.as_posix(), allow_pickle=True).item()
+        gallery_ids = d_.get("gallery_ids")
+        gallery_id_paths = d_.get("gallery_id_paths")
+    else:
+        for gallery_path in gallery_paths:
+            gallery_ids_tmp = os.listdir(gallery_path)
+            gallery_ids_tmp = natsorted(
+                filter(
+                    lambda x: len(list(os.listdir(gallery_path / x))) > 0,
+                    gallery_ids_tmp,
+                )
+            )
+            gallery_ids_tmp = list(map(lambda x: x.strip().lower(), gallery_ids_tmp))
+            gallery_id_path_tmp = list(map(lambda x: gallery_path / x, gallery_ids_tmp))
+            gallery_id_paths.extend(gallery_id_path_tmp)
+            gallery_ids.extend(gallery_ids_tmp)
+        np.save(
+            path_cache.as_posix(),
+            {"gallery_ids": gallery_ids, "gallery_id_paths": gallery_id_paths},
         )
-        gallery_ids_tmp = list(map(lambda x: x.strip().lower(), gallery_ids_tmp))
-        gallery_id_path_tmp = list(map(lambda x: gallery_path / x, gallery_ids_tmp))
-        gallery_id_paths.extend(gallery_id_path_tmp)
-        gallery_ids.extend(gallery_ids_tmp)
 
     gallery_features = np.zeros((len(gallery_ids), feature_size))
     print("Gallery original size: ", len(gallery_ids))
@@ -348,33 +362,20 @@ def eval_multiple_gallery(
     # load caface
     aggregator, model, hyper_param = load_caface(ckpt_path, device=device)
 
-    gallery_cache = (
-        CACHE_FOLDER
-        / f"{exp_dir}/gallery.npy"
-    )
-    matefeats_nonfused_cache = (
-        CACHE_FOLDER
-        / f"{exp_dir}/mate_features.npy"
-    )
-    mateints_nonfused_cache = (
-        CACHE_FOLDER
-        / f"{exp_dir}/mate_intermediates.npy"
-    )
-    nonmatefeats_nonfused_cache = (
-        CACHE_FOLDER
-        / f"{exp_dir}/nonmate_features.npy"
-    )
-    nonmateints_nonfused_cache = (
-        CACHE_FOLDER
-        / f"{exp_dir}/nonmate_intermediates.npy"
-    )
+    gallery_cache = CACHE_FOLDER / f"{exp_dir}/gallery.npy"
+    matefeats_nonfused_cache = CACHE_FOLDER / f"{exp_dir}/mate_features.npy"
+    mateints_nonfused_cache = CACHE_FOLDER / f"{exp_dir}/mate_intermediates.npy"
+    nonmatefeats_nonfused_cache = CACHE_FOLDER / f"{exp_dir}/nonmate_features.npy"
+    nonmateints_nonfused_cache = CACHE_FOLDER / f"{exp_dir}/nonmate_intermediates.npy"
     gallery_cache.parent.mkdir(exist_ok=True, parents=True)
 
     if gallery_cache.exists():
         gallery_features = np.load(gallery_cache)
     else:
-        for gallery_idx, id_path in enumerate(gallery_id_path):
+        gallery_pbar = tqdm(gallery_id_paths)
+        for gallery_idx, id_path in enumerate(gallery_pbar):
             gallery_id = id_path.stem
+            gallery_pbar.set_description(f"Enroll {gallery_id}")
 
             gallery_images = list(id_path.glob("*.[jp][pn]g"))
             if len(gallery_images) == 0:
@@ -395,7 +396,7 @@ def eval_multiple_gallery(
             fs = np.array(fs)
             gallery_feature = l2_normalize(np.array(fs).mean(0))
             gallery_features[gallery_idx] = gallery_feature
-            np.save(gallery_cache, gallery_features)
+        np.save(gallery_cache, gallery_features)
 
     print("Gallery original feature shape: ", gallery_features.shape)
     mate_folders = os.listdir(mate_path)
@@ -411,7 +412,7 @@ def eval_multiple_gallery(
             mate_not_in_gallery.add(mate_id)
             continue
         final_mate_folders.append(mate_folder)
-    print("gallery ids: ", gallery_ids)
+    # print("gallery ids: ", gallery_ids)
     print("List mate that doesn't have gallery, will be skipped: ", mate_not_in_gallery)
     final_mate_folders = natsorted(final_mate_folders)
     if matefeats_nonfused_cache.exists():
@@ -423,7 +424,11 @@ def eval_multiple_gallery(
 
         mate_features = np.zeros((len(final_mate_folders), feature_size))
         for mate_idx, (probe_features, probe_intermediates) in enumerate(
-            zip(mate_nonfused_features, mate_nonfused_intermediates)
+            tqdm(
+                zip(mate_nonfused_features, mate_nonfused_intermediates),
+                total=mate_nonfused_features.shape[0],
+                desc="Mate fusion",
+            )
         ):
             probe_fused_feature, _ = fuse_feature(
                 probe_features,
@@ -439,7 +444,9 @@ def eval_multiple_gallery(
         mate_nonfused_features = []
         mate_nonfused_intermediates = []
         mate_features = np.zeros((len(final_mate_folders), feature_size))
-        for mate_idx, mate_id in enumerate(final_mate_folders):
+        mate_pbar = tqdm(final_mate_folders)
+        mate_pbar.set_description("Mate extraction")
+        for mate_idx, mate_id in enumerate(mate_pbar):
             id_path = mate_path / mate_id
 
             mate_images = list(id_path.glob("*.[jp][pn]g"))
@@ -480,7 +487,11 @@ def eval_multiple_gallery(
 
         nonmate_features = np.zeros((len(nonmate_ids), feature_size))
         for nonmate_idx, (probe_features, probe_intermediates) in enumerate(
-            zip(nonmate_nonfused_features, nonmate_nonfused_intermediates)
+            tqdm(
+                zip(nonmate_nonfused_features, nonmate_nonfused_intermediates),
+                total=nonmate_nonfused_features.shape[0],
+                desc="Nonmate fusion",
+            )
         ):
             probe_fused_feature, _ = fuse_feature(
                 probe_features,
@@ -495,7 +506,9 @@ def eval_multiple_gallery(
         nonmate_features = np.zeros((len(nonmate_ids), feature_size))
         nonmate_nonfused_features = []
         nonmate_nonfused_intermediates = []
-        for nonmate_idx, nonmate_id in enumerate(nonmate_ids):
+        for nonmate_idx, nonmate_id in enumerate(
+            tqdm(nonmate_ids, desc="Nonmate extraction")
+        ):
             id_path = nonmate_path / nonmate_id
 
             nonmate_images = list(id_path.glob("*.[jp][pn]g"))
@@ -528,7 +541,9 @@ def eval_multiple_gallery(
             break
         pbar.set_description(f"Eval for gallery size: {gallery_size}")
         if gallery_size > gallery_features.shape[0]:
-            print(f"Gallery size {gallery_size} is bigger than total gallery size: {gallery_features.shape}. Evaluate with all gallery feature then quit!")
+            print(
+                f"Gallery size {gallery_size} is bigger than total gallery size: {gallery_features.shape}. Evaluate with all gallery feature then quit!"
+            )
             gallery_size = gallery_features.shape[0]
             break_in_next_loop = True
         cur_gallery_features = gallery_features[:gallery_size]
@@ -539,9 +554,9 @@ def eval_multiple_gallery(
         mate_predict_idx, mate_predict_score = np.argmax(
             mate_gallery_similarity, axis=1
         ), np.max(mate_gallery_similarity, axis=1)
-        _, nonmate_predict_score = np.argmax(nonmate_gallery_similarity, axis=1), np.max(
+        _, nonmate_predict_score = np.argmax(
             nonmate_gallery_similarity, axis=1
-        )
+        ), np.max(nonmate_gallery_similarity, axis=1)
         mate_predict_str = np.array([gallery_ids[idx] for idx in mate_predict_idx])
         mate_label = np.array(
             [mate_id.split("_")[-1].strip().lower() for mate_id in final_mate_folders]
@@ -567,7 +582,17 @@ def eval_multiple_gallery(
             FNIR = FN / num_nonmate_searchs
             fpirs.append(FPIR)
             fnirs.append(FNIR)
-        np.save(f"{exp_dir}/{gallery_size}_fpir_fnir.npy", {"FNIR": fnirs, "FPIR": fpirs})
+            if threshold in [0.3, 0.4, 0.5]:
+                print(f"TP@{threshold}@gs{gallery_size}: {TP}")
+                print(f"FP@{threshold}@gs{gallery_size}: {FP}")
+                print(f"FN@{threshold}@gs{gallery_size}: {FN}")
+                print(f"FPIR@{threshold}@gs{gallery_size}: {FPIR}")
+                print(f"FNIR@{threshold}@gs{gallery_size}: {FNIR}")
+
+        np.save(
+            output_dir / "{gallery_size}_fpir_fnir.npy", {"FNIR": fnirs, "FPIR": fpirs}
+        )
+
 
 @app.command()
 def plot_multiple(

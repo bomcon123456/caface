@@ -180,7 +180,6 @@ def get_features(
                     ]
                     mate_scores.append(cur_id_scores)
 
-
             assert len(mate_nonfused_features) == len(mate_scores)
         assert len(mate_nonfused_features) == len(mate_nonfused_intermediates)
 
@@ -269,7 +268,9 @@ def get_features(
             if nonmate_scores_cache.exists():
                 nonmate_scores = np.load(nonmate_scores_cache)
             else:
-                loaded_paths_cache = np.load(nonmate_loaded_paths_cache, allow_pickle=True)
+                loaded_paths_cache = np.load(
+                    nonmate_loaded_paths_cache, allow_pickle=True
+                )
                 nonmate_scores = []
                 for probe_paths in loaded_paths_cache:
                     cur_id_scores = [
@@ -731,24 +732,20 @@ def plot_multi_gallery(
     ax1.grid(linestyle="--")
 
     # plt.figure(figsize=(15, 7))
-    files = list(exp_path.glob("*.npy"))
+    files = sorted(
+        list(exp_path.glob("*.npy")), key=lambda x: int(x.stem.split("_")[0])
+    )
     if override_legend is None or len(override_legend) == 0:
         override_legend = [f'Gallery size: {file.stem.split("_")[0]}' for file in files]
+    saved_fnirs_at_fpir3e3 = []
     for filepath, legend_name in zip(files, override_legend):
         d = np.load(filepath.as_posix(), allow_pickle=True).item()
         fpirs, fnirs = d["FPIR"], d["FNIR"]
         ax1.plot(fpirs, fnirs, linestyle="solid", label=legend_name)
         TARGET_FPIR = 3e-3
-        diff = np.array(fpirs) - TARGET_FPIR
-        diff_mask = np.ma.MaskedArray(diff, diff >= 0)
-        min_index = np.ma.argmin(diff_mask)    # == 6
-        print(fpirs)
-        print(min_index)
+        _, min_index = min(list(zip(abs(np.array(fpirs) - TARGET_FPIR), range(len(fpirs)))))
         fnir = fnirs[min_index]
-        fpir = fpirs[min_index]
-        print(f"fpir={fpir}, fnir={fnir}")
-        exit()
-
+        saved_fnirs_at_fpir3e3.append(fnir)
 
     colormap = plt.cm.Dark2  # nipy_spectral, Set1,Paired
     colors = [colormap(i) for i in np.linspace(0, 0.7, len(ax1.lines))]
@@ -763,6 +760,21 @@ def plot_multi_gallery(
     ax1.set_xlabel("False Positive Identification Rate", fontsize=16)
     ax1.set_ylabel("False Negative Identification Rate", fontsize=16)
     fig1.savefig((output_dir / f"det_curve.png").as_posix())
+    plt.close()
+
+    x = list(map(lambda x: int(x.lstrip("Gallery size:")), override_legend))
+
+    fig2 = plt.figure(figsize=(15, 7))
+    ax2 = fig2.add_subplot(111)
+    ax2.plot(list(range(1,len(x)+1)), saved_fnirs_at_fpir3e3, "D-r")
+    ax2.set_xticks(list(range(1,len(x)+1)), x, rotation="vertical")
+    ax2.set_title(
+        f"FNIR@FPIR=3e-3 with different gallery size",
+        fontsize=20,
+    )
+    ax2.set_xlabel("Gallery size", fontsize=16)
+    ax2.set_ylabel("FNIR@FPIR=3e-3", fontsize=16)
+    fig2.savefig((output_dir / f"gallery_moving.png").as_posix())
 
 
 if __name__ == "__main__":
